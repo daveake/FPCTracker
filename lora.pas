@@ -3,18 +3,17 @@ unit LoRa;
 
 interface
 
-uses  rpi_hal,cthreads,BaseUnix,Unix,objects,sysutils,strings,strutils;
+uses  spi,cthreads,BaseUnix,Unix,objects,sysutils,strings,strutils;
   
 type
   TLoRa = class
   private
     { Private declarations }
-	LoRaBus: Integer;
-	LoRaChannel: Integer;
 	CurrentMode: Byte;
 	PayloadLength: Integer;
 	Sending: Boolean;
-	procedure SetMode(Mode: Integer);
+	SPI: TSPI;
+	procedure SetMode(Mode: Byte);
 	procedure WriteRegister(Reg, Value: Byte);
 	function ReadRegister(Reg: Byte): Byte;
   public
@@ -108,16 +107,26 @@ const
 implementation
 
 procedure TLoRa.WriteRegister(Reg, Value: Byte);
+var
+	Before, After: Byte;
 begin
-	SPI_Write(LoRaBus, LoRaChannel, Reg + 128, Value);
+	Before := ReadRegister(Reg);
+	
+	SPI.WriteRegister(Reg, Value);
+	
+	After := ReadRegister(Reg);
+	
+	// if After <> Value then begin
+	// 	WriteLn('*** Write(' + IntToHex(Reg, 2) + ') ' + IntToHex(Before, 2) + '-->' + IntToHex(After, 2) + '(' + IntToHex(Value, 2) + ')');
+	// end;
 end;
 
 function TLoRa.ReadRegister(Reg: Byte): Byte;
 begin
-	Result := SPI_Read(LoRaBus, LoRaChannel, Reg);
+	Result := SPI.ReadRegister(Reg);
 end;
 
-procedure TLoRa.SetMode(Mode: Integer);
+procedure TLoRa.SetMode(Mode: Byte);
 begin
 	if Mode <> CurrentMode then begin
 		if Mode = RF98_MODE_TX then begin
@@ -199,10 +208,8 @@ end;
 constructor TLoRa.Create(Bus, Channel,  Mode: Integer; Frequency: Double);
 begin
 	WriteLn('LoRa Bus ' + IntToStr(Bus) + ', Channel ' + IntToStr(Channel));
-	LoRaBus := Bus;
-	LoRaChannel := Channel;
 	
-	RPI_HW_Start([InitGPIO, InitSPI]);
+	SPI := TSPI.Create(Bus, Channel);
 	
 	CurrentMode := $81;
 	
@@ -249,8 +256,7 @@ begin
 		Data[i] := Byte(Text[i]);
 	end;
 	
-	// SPI_Transfer(LoRaBus, LoRaChannel, #80 + 'Hello');
-	SPI_Write_Buffer(LoRaBus, LoRaChannel, Data, Len+1);
+	SPI.WriteBuffer(Data, Len+1);
 		
 	if PayloadLength > 0 then begin
 		WriteRegister(REG_PAYLOAD_LENGTH, PayloadLength);
@@ -261,5 +267,6 @@ begin
 	// Send it
 	SetMode(RF98_MODE_TX);
 end;
+
 
 end.

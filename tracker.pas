@@ -20,16 +20,14 @@ begin
   
   GPSSource := TGPSSource.Create(False);
 
-  LoRa1 := TLoRa.Create(0, 1, 1, 434.450);  
+  LoRa1 := TLoRa.Create(0, 0, 1, 434.450);  
   
   while True do begin
 	// Wait for LoRa
-	while LoRa1.IsSending do begin
-		Sleep(100);
-	end;
+	// while LoRa1.IsSending do begin
+	// 	Sleep(100);
+	// end;
 
-	//Sleep(1000);
-	
 	WriteLn('Getting a position ....');
 	// Get position
 	Position := GPSSource.GetPosition;
@@ -56,5 +54,6 @@ begin
 	WriteLn('Sending a packet ...');
 	LoRa1.SendText(Sentence);
 	WriteLn('** SENT **');
+	Sleep(3000);
   end;
 end.

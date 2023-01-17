@@ -139,17 +139,41 @@ begin
     end;
 end;
 
+procedure FixUBXChecksum(var Temp: Array of Byte; Len: Integer);
+var
+  i: Integer;
+  CK_A, CK_B: Byte;
+begin
+  CK_A := 0;
+  CK_B := 0;
+
+  for i := 2 to Len-3 do begin
+    CK_A := CK_A + Temp[i];
+    CK_B := CK_B + CK_A;
+  end;
+   
+  Temp[Len-2] := CK_A;
+  Temp[Len-1] := CK_B;
+end;
+
 procedure TGPSSource.SetFlightMode(serialhandle: LongInt; FlightMode: Boolean);
 const
 	SetNav: Array[0..43] of Byte = ($B5, $62, $06, $24, $24, $00, $FF, $FF, $06, $03, $00, $00, $00, $00, $10, $27, $00, $00, $05, $00, $FA, $00, $FA, $00, $64, $00, $2C, $01, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $16, $DC);
 begin
-	// SetNav: String = {0xB5, 0x62, 0x06, 0x24, 0x24, 0x00, 0xFF, 0xFF, 0x06, 0x03, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0x05, 0x00, 0xFA, 0x00, 0xFA, 0x00, 0x64, 0x00, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0xDC};
-		
-	SerWrite(serialHandle, setNav, 44);
+	if FlightMode then begin
+		SetNav[8] := 6;
+		WriteLn('Setting UBlox flight mode');
+	end else begin
+		SetNav[8] := 3;
+		WriteLn('Setting UBlox pedestrian mode');
+	end;
+  
+	FixUBXChecksum(SetNav, SizeOf(SetNav));
+	
+	SerWrite(serialHandle, SetNav, SizeOf(SetNav));
 		
 	WriteLn('Setting UBlox flight mode');
 end;
-
 
 procedure TGPSSource.Execute;         
 var
@@ -165,13 +189,13 @@ begin
 	FillChar(CurrentPosition, SizeOf(CurrentPosition), 0);
 	CommPort := '/dev/ttyAMA0';
 	serialhandle := SerOpen(CommPort);
-	WriteLn('Handle = ' + IntToStr(serialhandle));
+	WriteLn('GPS Handle = ' + IntToStr(serialhandle));
 	
 	if (serialhandle >= 0) then begin
 		Flags:= [];
 		SerSetParams(serialhandle,9600,8,NoneParity,1,Flags); 
 		Line := '';
-		PositionCount := 0;
+		PositionCount := 5;
 
 		while not Terminated do begin
 			Count := SerRead(serialhandle, Buffer, 100);
@@ -179,9 +203,9 @@ begin
 				if Buffer[i] = #13 then begin
 					ExtractGPSPosition(serialHandle, String(Line));
 					// WriteLn(Line);
-					Inc(PositionCount);
-					if PositionCount >= 60 then begin
-						PositionCount := 0;
+					Dec(PositionCount);
+					if PositionCount <= 0 then begin
+						PositionCount := 60;
 						SetFlightMode(serialhandle, CurrentPosition.Altitude > 2000);
 					end;
 					Line := '';
@@ -190,7 +214,7 @@ begin
 				end else if Line <> '' then begin
 					Line := Line + Buffer[i];
 				end else if Buffer[i] <> #10 then begin
-					WriteLn(IntToHex(Ord(Buffer[i]), 2));
+					// WriteLn(IntToHex(Ord(Buffer[i]), 2));
 				end;
             end;
             Sleep(100);
